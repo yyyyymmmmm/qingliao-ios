@@ -10,7 +10,7 @@ import SwiftUI
 //         ⚠️ 新增/删除 case 时两处一起改，穷尽性才会被 CI 那道检查抓住。
 enum DashboardSheet: String, Identifiable {
     case lights, climate, service, serviceHermes, disks, docker, weather, connectorPanel
-    case lock, temps, doorbell
+    case lock, temps, doorbell, energy
     var id: String { rawValue }
 }
 
@@ -332,6 +332,10 @@ struct DashboardView: View {
                        sub: "室内温度 · 点击看各房间", status: .on)
                 .tapButton { activeSheet = .temps }
                 .matchedTransitionSource(id: DashboardSheet.temps.id, in: sheetZoomNS)
+            DeviceCard(name: "电表", icon: "bolt.fill", value: electricityBalance,
+                       sub: "电费余额 · 点击查看用电", status: energyEntities.isEmpty ? .warn : .on)
+                .tapButton { activeSheet = .energy }
+                .matchedTransitionSource(id: DashboardSheet.energy.id, in: sheetZoomNS)
         }
     }
 
@@ -1212,6 +1216,25 @@ struct DashboardView: View {
         .sorted { $0.friendlyName < $1.friendlyName }
     }
 
+    /// 国网电表数据由 Home Assistant 提供；电费和用电量均为只读实体。
+    private var energyEntities: [HAEntity] {
+        haEntities.filter { entity in
+            let id = entity.entityID
+            guard id.hasPrefix("sensor.sgcc_") || id.hasPrefix("sensor.guo_wang_dian_fei_") else { return false }
+            guard !id.contains("_daily_") && !id.contains("_history") else { return false }
+            return isAvailable(entity)
+        }
+        .sorted { $0.friendlyName < $1.friendlyName }
+    }
+
+    private var electricityBalance: String {
+        guard let balance = energyEntities.first(where: {
+            $0.entityID.hasPrefix("sensor.sgcc_") && $0.entityID.hasSuffix("_balance")
+                && !$0.entityID.hasSuffix("_prepay_balance")
+        }) else { return "--" }
+        return balance.state + " 元"
+    }
+
     /// 安防卡副标题：没有 guard_mode 实体时要说实话，别写"点击布防"骗人
     private var alarmSub: String {
         if alarm == nil { return "未找到网关警戒开关" }
@@ -1346,6 +1369,14 @@ struct DashboardView: View {
                                 emptySubtitle: "看板卡片只取一个室内温度，这里列全所有 temperature 实体")
                 .presentationDetents([.medium, .large])
                 .navigationTransition(.zoom(sourceID: DashboardSheet.temps.id, in: sheetZoomNS))
+        case .energy:
+            HADeviceDetailSheet(title: "电表与电费",
+                                detail: "\(energyEntities.count) 项用电数据",
+                                entities: energyEntities,
+                                emptyTitle: "没有读到电表数据",
+                                emptySubtitle: "请检查 Home Assistant 的国网电费集成")
+                .presentationDetents([.medium, .large])
+                .navigationTransition(.zoom(sourceID: DashboardSheet.energy.id, in: sheetZoomNS))
         case .doorbell:
             HADeviceDetailSheet(title: "猫眼",
                                 detail: "\(doorbellEntities.count) 个可用实体",

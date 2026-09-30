@@ -36,7 +36,7 @@ struct RouterStatus {
         r.memTotal = j["mem_total_gb"] as? Double ?? 0
         r.memFree = j["mem_free_gb"] as? Double ?? 0
         r.temp = j["temp"] as? String ?? "--"
-        r.clashRunning = (j["clash_running"] as? Bool) ?? false
+        r.clashRunning = (j["proxy_running"] as? Bool) ?? (j["clash_running"] as? Bool) ?? false
         r.onlineDevices = (j["online_devices"] as? Int) ?? 0
         r.error = j["error"] as? String ?? ""
         return r
@@ -45,7 +45,7 @@ struct RouterStatus {
     static func merge(_ old: RouterStatus, with j: [String: Any]) -> RouterStatus {
         var r = old
         if let ok = j["ok"] as? Bool { r.ok = ok }
-        if let cr = j["clash_running"] as? Bool { r.clashRunning = cr }
+        if let cr = (j["proxy_running"] as? Bool) ?? (j["clash_running"] as? Bool) { r.clashRunning = cr }
         if let e = j["error"] as? String, !e.isEmpty { r.error = e }
         return r
     }
@@ -111,7 +111,7 @@ struct RouterPanel: View {
                           sub: "/ \(String(format: "%.1fG", router.memTotal))", ratio: router.memPct, color: .green)
                 ServiceCard(name: "运行时间", icon: "clock.fill", running: true, detail: router.uptime)
                 // Clash 卡：点击弹窗（同智能家居开关卡交互）
-                ServiceCard(name: "Clash", icon: "bolt.shield.fill", running: router.clashRunning,
+                ServiceCard(name: "Open-Box", icon: "bolt.shield.fill", running: router.clashRunning,
                             detail: router.clashRunning ? "代理已生效 · 点击管理" : "已停止 · 点击管理")
                     .onTapGesture { showClashSheet = true }
             }
@@ -146,7 +146,7 @@ struct ClashSheet: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack {
-                Text("⚡ Clash 管理")
+                Text("⚡ Open-Box 管理")
                     .font(.system(size: Typography.title, weight: .bold))
                 Spacer()
                 Circle()
@@ -175,7 +175,7 @@ struct ClashSheet: View {
                         Image(systemName: "play.fill")
                             .font(.system(size: Typography.titleXL))
                             .foregroundStyle(.white)
-                        Text("打开 Clash")
+                        Text("打开 Open-Box")
                             .font(.system(size: Typography.body, weight: .semibold))
                             .foregroundStyle(.white)
                         Text("开启代理加速")
@@ -197,7 +197,7 @@ struct ClashSheet: View {
                         Image(systemName: "stop.fill")
                             .font(.system(size: Typography.titleXL))
                             .foregroundStyle(.white)
-                        Text("关闭 Clash")
+                        Text("关闭 Open-Box")
                             .font(.system(size: Typography.body, weight: .semibold))
                             .foregroundStyle(.white)
                         Text("恢复直连")
@@ -216,14 +216,14 @@ struct ClashSheet: View {
         .padding(18)
         .padding(.top, Spacing.sm)
         // SR36：关闭 Clash 的二次确认（弹窗只有 240pt，动作面板浮在表面上不影响布局）
-        .confirmationDialog("关闭 Clash 代理？", isPresented: $confirmStop, titleVisibility: .visible) {
-            Button("关闭 Clash", role: .destructive) {
+        .confirmationDialog("关闭 Open-Box 代理？", isPresented: $confirmStop, titleVisibility: .visible) {
+            Button("关闭 Open-Box", role: .destructive) {
                 dismiss()
                 Task { try? await Task.sleep(for: .seconds(0.3)); onStop() }
             }
             Button("取消", role: .cancel) { }
         } message: {
-            Text("后端会 SSH 进路由器停掉 Clash 进程，所有走代理的流量立刻回到直连。")
+            Text("后端会通过 SSH 停止 Open-Box 服务，代理流量将恢复直连。")
         }
     }
 }
